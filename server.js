@@ -124,8 +124,9 @@ app.get("/api/active", async (req, res) => {
   const lat = parseFloat(req.query.lat);
   const lon = parseFloat(req.query.lon);
 
-  if (nearby && (Number.isNaN(lat) || Number.isNaN(lon))) {
-    return res.status(400).json({ error: "lat/lon required for nearby filter" });
+  // Now require lat/lon for both nearby and 5-mile views
+  if (Number.isNaN(lat) || Number.isNaN(lon)) {
+    return res.status(400).json({ error: "lat/lon required for viewing others" });
   }
 
   if (nearby) {

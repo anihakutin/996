@@ -336,7 +336,16 @@
     <div class="panel" id="panel">
       <div class="drawer-handle" id="drawerHandle"></div>
       <h1>996NearMe.com</h1>
-      <div class="row" id="headerNote">Tap <span class="badge">Lock In</span> to share your live pin.</div>
+      <div class="row" id="headerNote">See nearby 996'ers or tap <span class="badge">Lock In</span> to share your live pin.</div>
+      <div class="row" id="locationPrompt" style="display:none;">
+        <div class="ask">
+          <strong>Enable location to see nearby 996'ers</strong><br>
+          <small>We need your location to show you who's working nearby, even when you're not locked in.</small>
+          <div style="margin-top:8px;">
+            <button id="enableLocation" class="btn btn-primary" style="padding:6px 12px;width:auto;">Enable Location</button>
+          </div>
+        </div>
+      </div>
 
       <label>Name</label>
       <input id="name" placeholder="Your name" />
@@ -366,6 +375,9 @@
           <button id="showAll" class="btn btn-secondary" style="margin:0;">Show 5 Miles</button>
           <span id="total" class="badge" style="margin-left:auto;">0 total</span>
         </div>
+        <div id="viewingMode" class="row" style="display:none; font-size:11px; color:var(--text-muted); margin-top:8px;">
+          👁️ Viewing mode - You can see others but aren't sharing your location
+        </div>
       </div>
     </div>
     <div id="map" class="map"></div>
@@ -382,6 +394,7 @@
     let map, meMarker, circle;
     const markers = new Map(); // id -> marker
     let me = null; // { id, ... }
+    let currentLocation = null; // { lat, lon } - for viewing others without being locked in
     
     // Haversine distance calculation (meters)
     function haversine(lat1, lon1, lat2, lon2) {
@@ -491,15 +504,111 @@
       map.setView([40.73061, -73.935242], 19);
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition((pos) => {
-          map.setView([pos.coords.latitude, pos.coords.longitude], 19);
+          const lat = pos.coords.latitude;
+          const lon = pos.coords.longitude;
+          currentLocation = { lat, lon };
+          map.setView([lat, lon], 19);
+          // Load users immediately when we get location
+          loadUsers();
         }, (err) => {
           console.warn('Geolocation failed:', err);
+          // Still try to load users in case we have stored location
+          loadUsers();
         }, {
           enableHighAccuracy: true,
           timeout: 10000,
           maximumAge: 300000
         });
+      } else {
+        // No geolocation support, still try to load users
+        loadUsers();
       }
+    }
+    
+    async function loadUsers() {
+      try {
+        const users = await fetchActive(!showingAll);
+        renderList(users);
+        users.forEach(upsertMarker);
+        
+        // Check if stored user is still active
+        if (storedUser && storedUser.id) {
+          const activeUser = users.find(u => u.id === storedUser.id);
+          if (activeUser) {
+            me = activeUser;
+            // Update stored user with latest data
+            saveUser(activeUser);
+          } else {
+            // User is no longer active, clear stored data and reset UI
+            localStorage.removeItem(USER_STORAGE_KEY);
+            storedUser = null;
+            me = null;
+            const toggleBtn = document.getElementById('toggle');
+            if (toggleBtn) {
+              toggleBtn.textContent = "Lock In";
+              toggleBtn.className = "btn btn-primary";
+            }
+            // Show the form again
+            const formEls = ['name','handle','what'].map(id => document.getElementById(id));
+            formEls.forEach(el => el && el.classList.remove('hidden'));
+            document.querySelectorAll('.panel label').forEach(el => el.classList.remove('hidden'));
+            const headerNote = document.getElementById('headerNote');
+            if (headerNote) headerNote.innerHTML = `See nearby 996'ers or tap <span class=\"badge\">Lock In</span> to share your live pin.`;
+          }
+        }
+        
+        // Show/hide location prompt based on whether we have location
+        updateLocationPrompt();
+      } catch (e) {
+        console.warn('Failed to load users:', e);
+        updateLocationPrompt();
+      }
+    }
+    
+    function updateLocationPrompt() {
+      const locationPrompt = document.getElementById('locationPrompt');
+      const viewingMode = document.getElementById('viewingMode');
+      
+      if (locationPrompt) {
+        // Show prompt if we don't have location and user is not locked in
+        if (!currentLocation && !me) {
+          locationPrompt.style.display = 'block';
+        } else {
+          locationPrompt.style.display = 'none';
+        }
+      }
+      
+      if (viewingMode) {
+        // Show viewing mode indicator if we have location but user is not locked in
+        if (currentLocation && !me) {
+          viewingMode.style.display = 'block';
+        } else {
+          viewingMode.style.display = 'none';
+        }
+      }
+    }
+    
+    function requestLocationPermission() {
+      if (!navigator.geolocation) {
+        alert('Geolocation is not supported by this browser.');
+        return;
+      }
+      
+      navigator.geolocation.getCurrentPosition((pos) => {
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+        currentLocation = { lat, lon };
+        map.setView([lat, lon], 19);
+        updateLocationPrompt();
+        loadUsers();
+      }, (err) => {
+        console.warn('Geolocation failed:', err);
+        alert('Unable to get your location. Please check your browser settings and try again.');
+      }, {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 300000
+      });
     }
 
     function avatarHtml(u) {
@@ -648,14 +757,23 @@
 
     async function fetchActive(useNearbyFilter = false) {
       let url = "/api/active";
+      let lat, lon;
+      
+      // Use locked-in user location if available, otherwise use current location
       if (me) {
-        // Always pass coordinates since we now require them for both modes
-        const nearbyParam = useNearbyFilter ? 'true' : 'false';
-        url += `?nearby=${nearbyParam}&lat=${me.lat}&lon=${me.lon}`;
+        lat = me.lat;
+        lon = me.lon;
+      } else if (currentLocation) {
+        lat = currentLocation.lat;
+        lon = currentLocation.lon;
       } else {
-        // If no user location, return empty array
+        // If no location available, return empty array
         return [];
       }
+      
+      const nearbyParam = useNearbyFilter ? 'true' : 'false';
+      url += `?nearby=${nearbyParam}&lat=${lat}&lon=${lon}`;
+      
       const r = await fetch(url);
       return await r.json();
     }
@@ -793,7 +911,7 @@
       formEls.forEach(el => el && el.classList.remove('hidden'));
       document.querySelectorAll('.panel label').forEach(el => el.classList.remove('hidden'));
       const headerNote = document.getElementById('headerNote');
-      if (headerNote) headerNote.innerHTML = `Tap <span class=\"badge\">Lock In</span> to share your live pin.`;
+      if (headerNote) headerNote.innerHTML = `See nearby 996'ers or tap <span class=\"badge\">Lock In</span> to share your live pin.`;
     }
 
     function setupSocket() {
@@ -834,35 +952,24 @@
       
       setupSocket();
 
-      // initial
-      const users = await fetchActive(!showingAll);
-      renderList(users);
-      users.forEach(upsertMarker);
+      // initial load will happen in initMap when location is available
       
       // Check if stored user is still active and restore state
       if (storedUser && storedUser.id) {
-        const activeUser = users.find(u => u.id === storedUser.id);
-        if (activeUser) {
-          me = activeUser;
-          const toggleBtn = document.getElementById('toggle');
-          if (toggleBtn) {
-            toggleBtn.textContent = "I'm done";
-            toggleBtn.className = "btn btn-danger";
-          }
-          // Update stored user with latest data
-          saveUser(activeUser);
-          // Hide the form and update header since user is still locked in
-          const formEls = ['name','handle','what'].map(id => document.getElementById(id));
-          formEls.forEach(el => el && el.classList.add('hidden'));
-          document.querySelectorAll('.panel label').forEach(el => el.classList.add('hidden'));
-          const headerNote = document.getElementById('headerNote');
-          if (headerNote) headerNote.innerHTML = `Tap <span class=\"badge\">I'm done</span> when you want to stop sharing.`;
-        } else {
-          // User is no longer active, clear stored data
-          localStorage.removeItem(USER_STORAGE_KEY);
-          storedUser = null;
-          me = null;
+        // We'll check this after we load users in loadUsers function
+        // For now, just set up the UI state
+        me = storedUser;
+        const toggleBtn = document.getElementById('toggle');
+        if (toggleBtn) {
+          toggleBtn.textContent = "I'm done";
+          toggleBtn.className = "btn btn-danger";
         }
+        // Hide the form and update header since user was locked in
+        const formEls = ['name','handle','what'].map(id => document.getElementById(id));
+        formEls.forEach(el => el && el.classList.add('hidden'));
+        document.querySelectorAll('.panel label').forEach(el => el.classList.add('hidden'));
+        const headerNote = document.getElementById('headerNote');
+        if (headerNote) headerNote.innerHTML = `Tap <span class=\"badge\">I'm done</span> when you want to stop sharing.`;
       }
 
       // button
@@ -881,6 +988,8 @@
           if (me?.id) {
             // 5 miles in meters
             fitMapToRadius(me.lat, me.lon, 8046.72);
+          } else if (currentLocation) {
+            fitMapToRadius(currentLocation.lat, currentLocation.lon, 8046.72);
           } else {
             fitMapToAll();
           }
@@ -891,6 +1000,8 @@
             map.setView(lastCenter, lastZoom);
           } else if (me?.id) {
             map.setView([me.lat, me.lon], 17);
+          } else if (currentLocation) {
+            map.setView([currentLocation.lat, currentLocation.lon], 17);
           } else {
             fitMapToAll();
           }
@@ -905,6 +1016,9 @@
 
       // theme toggle
       document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+      
+      // location permission
+      document.getElementById('enableLocation').addEventListener('click', requestLocationPermission);
       
       // mobile drawer controls
       document.getElementById('drawerTab').addEventListener('click', toggleDrawer);
@@ -1005,9 +1119,7 @@
 
       // Auto-refresh user list every 30 seconds
       setInterval(async () => {
-        const users = await fetchActive(!showingAll);
-        renderList(users);
-        users.forEach(upsertMarker);
+        await loadUsers();
       }, 30000);
 
       // while locked in, refresh location every ~60s to keep alive
