@@ -103,13 +103,20 @@
     .avatar { width: 28px; height: 28px; border-radius:50%; object-fit:cover; vertical-align:middle; margin-right:6px; }
     .person { display:flex; align-items:center; gap:8px; margin:8px 8px 0; }
     .list { margin:12px 0 0; flex:1; overflow:auto; }
+    .user-me { background: var(--btn-primary-bg); color: var(--btn-primary-color); padding: 8px; border-radius: 8px; margin-bottom: 8px; }
+    .user-me .person { margin: 0; }
+    .user-me strong { color: var(--btn-primary-color); }
+    .user-me::after { content: "You"; display: block; text-align: center; font-size: 10px; margin-top: 4px; opacity: 0.8; }
+    .user-list { max-height: 120px; overflow-y: auto; }
+    .user-list .person { margin: 4px 0; padding: 4px; border-radius: 6px; transition: background-color 0.2s ease; }
+    .user-list .person:hover { background-color: var(--btn-secondary-bg); }
     .bottom { margin-top:auto; padding:12px 8px 0; }
     .note { font-size:11px; color:var(--text-muted); margin-top:12px; }
     .ask { margin:12px 8px 0; padding:8px; background:var(--ask-bg); border:1px solid var(--ask-border); border-radius:8px; font-size:13px; }
     .foot { position: absolute; bottom: 8px; left: 8px; right: 330px; font-size:11px; background: var(--foot-bg); padding:4px 8px; border-radius:6px; z-index: 1000; }
     .leaflet-div-icon { background: transparent; border: none; }
     .pin { position: relative; }
-    .pin-badge { background:var(--btn-primary-bg); color:var(--btn-primary-color); padding:6px 8px; border-radius:12px; white-space:nowrap; font-size:13px; box-shadow:0 4px 12px rgba(0,0,0,0.25); }
+    .pin-badge { background:transparent; color:var(--text-primary); padding:6px 8px; border-radius:12px; white-space:nowrap; font-size:20px; }
     .pin-emoji { margin-right:6px; }
     .pin-pulse { position:absolute; left:50%; top:0; width:10px; height:10px; margin-top:6px; background:var(--btn-primary-bg); border-radius:999px; transform:translateX(-50%); box-shadow:0 0 0 0 rgba(17,17,17,0.5); animation:pulse 2s infinite; }
     @keyframes pulse { 0% { box-shadow:0 0 0 0 rgba(17,17,17,0.5);} 70% { box-shadow:0 0 0 14px rgba(17,17,17,0);} 100% { box-shadow:0 0 0 0 rgba(17,17,17,0);} }
@@ -192,6 +199,18 @@
     const THEME_STORAGE_KEY = '996nearme_theme';
     let storedUser = null;
     
+    // Random emoji assignment
+    const EMOJIS = ['🚀', '💻', '⚡', '🔥', '💡', '🎯', '🚀', '⭐', '🌟', '💎', '🎨', '🎵', '🎮', '📱', '💻', '⌨️', '🖥️', '📊', '📈', '🎪', '🎭', '🎨', '🖌️', '✏️', '📝', '📚', '🔬', '🧪', '⚗️', '🔭', '🌌', '🛸', '👨‍💻', '👩‍💻', '🧑‍💻', '👨‍🚀', '👩‍🚀', '🧑‍🚀'];
+    const userEmojis = new Map(); // user id -> emoji
+    
+    function getEmojiForUser(userId) {
+      if (!userEmojis.has(userId)) {
+        const randomEmoji = EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
+        userEmojis.set(userId, randomEmoji);
+      }
+      return userEmojis.get(userId);
+    }
+    
     function loadStoredUser() {
       try {
         const stored = localStorage.getItem(USER_STORAGE_KEY);
@@ -204,6 +223,16 @@
           if (nameInput && storedUser.name) nameInput.value = storedUser.name;
           if (handleInput && storedUser.x_handle) handleInput.value = storedUser.x_handle;
           if (whatInput && storedUser.what_working_on) whatInput.value = storedUser.what_working_on;
+          
+          // Restore button state if user was locked in
+          if (storedUser.id) {
+            me = storedUser;
+            const toggleBtn = document.getElementById('toggle');
+            if (toggleBtn) {
+              toggleBtn.textContent = "I'm done";
+              toggleBtn.className = "btn btn-danger";
+            }
+          }
         }
       } catch (e) {
         console.warn('Failed to load stored user:', e);
@@ -261,7 +290,7 @@
     function avatarHtml(u) {
       const handle = u.x_handle ? `<span>${u.x_handle}</span>` : '';
       const venue = u.is_venue && u.venue_name ? `<span class="badge">☕ ${u.venue_name}</span>` : '';
-      return `<div class="person">
+      return `<div class="person" data-user-id="${u.id}">
         <div>
           <div><strong>${u.name}</strong> ${handle} ${venue}</div>
           <div style="font-size:12px;color:#555;">${u.what_working_on || ""}</div>
@@ -271,19 +300,53 @@
 
     function renderList(users) {
       const el = document.getElementById('list');
-      el.innerHTML = users.map(avatarHtml).join('');
+      
+      // Check if current user is in the list (even if me variable isn't set yet)
+      const currentUserId = me?.id || storedUser?.id;
+      const meUser = currentUserId ? users.find(u => u.id === currentUserId) : null;
+      const otherUsers = users.filter(u => !currentUserId || u.id !== currentUserId);
+      
+      let html = '';
+      
+      // Show current user at top if found
+      if (meUser) {
+        html += `<div class="user-me">${avatarHtml(meUser)}</div>`;
+      }
+      
+      // Show other users in scrollable list
+      if (otherUsers.length > 0) {
+        html += `<div class="user-list">${otherUsers.map(avatarHtml).join('')}</div>`;
+      }
+      
+      el.innerHTML = html;
+      
+      // Add hover events to show/hide names on map
+      el.querySelectorAll('.person').forEach(personEl => {
+        const userId = personEl.getAttribute('data-user-id');
+        const marker = markers.get(userId);
+        
+        if (marker) {
+          personEl.addEventListener('mouseenter', () => {
+            marker.openPopup();
+          });
+          personEl.addEventListener('mouseleave', () => {
+            marker.closePopup();
+          });
+        }
+      });
+      
       const total = document.getElementById('total');
       if (total) total.textContent = `${users.length} total`;
     }
 
     function upsertMarker(u) {
-      const emoji = u.is_venue ? "☕" : "🚀";
+      const emoji = getEmojiForUser(u.id);
+      const currentUserId = me?.id || storedUser?.id;
       const icon = L.divIcon({
-        className: u.id === me?.id ? "leaflet-div-icon me" : "leaflet-div-icon",
+        className: u.id === currentUserId ? "leaflet-div-icon me" : "leaflet-div-icon",
         html: `<div class="pin">
                  <div class="pin-badge">
                    <span class="pin-emoji">${emoji}</span>
-                   ${u.name}
                  </div>
                  <div class="pin-pulse"></div>
                </div>`
@@ -298,7 +361,7 @@
         m.setIcon(icon);
         m.setPopupContent(avatarHtml(u));
       }
-      if (u.id === me?.id) {
+      if (u.id === currentUserId) {
         if (!meMarker) meMarker = m;
         if (circle) circle.setLatLng([u.lat, u.lon]); else circle = L.circle([u.lat, u.lon], {radius: ft100, weight:1}).addTo(map);
       }
@@ -452,6 +515,26 @@
       const users = await fetchActive();
       renderList(users);
       users.forEach(upsertMarker);
+      
+      // Check if stored user is still active and restore state
+      if (storedUser && storedUser.id) {
+        const activeUser = users.find(u => u.id === storedUser.id);
+        if (activeUser) {
+          me = activeUser;
+          const toggleBtn = document.getElementById('toggle');
+          if (toggleBtn) {
+            toggleBtn.textContent = "I'm done";
+            toggleBtn.className = "btn btn-danger";
+          }
+          // Update stored user with latest data
+          saveUser(activeUser);
+        } else {
+          // User is no longer active, clear stored data
+          localStorage.removeItem(USER_STORAGE_KEY);
+          storedUser = null;
+          me = null;
+        }
+      }
 
       // button
       document.getElementById('toggle').addEventListener('click', async () => {
