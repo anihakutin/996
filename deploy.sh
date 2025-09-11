@@ -123,8 +123,8 @@ setup_app_directory() {
         git pull
     else
         log_info "Cloning repository..."
-        # Replace with your actual repository URL
-        git clone https://github.com/YOUR_USERNAME/996ers-near-me.git .
+        # Clone your repository
+        git clone https://github.com/anihakutin/996.git .
     fi
     
     # Install dependencies

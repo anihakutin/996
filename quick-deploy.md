@@ -13,7 +13,7 @@
 ssh root@YOUR_SERVER_IP
 
 # Download and run the deployment script
-wget https://raw.githubusercontent.com/YOUR_USERNAME/996ers-near-me/main/deploy.sh
+wget https://raw.githubusercontent.com/anihakutin/996/main/deploy.sh
 chmod +x deploy.sh
 ./deploy.sh
 ```
@@ -38,8 +38,8 @@ apt install docker-compose-plugin -y
 3. **Deploy with Docker Compose:**
 ```bash
 # Clone your repository
-git clone https://github.com/YOUR_USERNAME/996ers-near-me.git
-cd 996ers-near-me
+git clone https://github.com/anihakutin/996.git
+cd 996
 
 # Copy environment template
 cp env.example .env
