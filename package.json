@@ -1,0 +1,19 @@
+{
+  "name": "996ers-near-me",
+  "version": "1.0.0",
+  "description": "Share your lock-in and see 996’ers nearby.",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "NODE_ENV=development node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "pg": "^8.12.0",
+    "socket.io": "^4.7.5",
+    "uuid": "^9.0.1",
+    "node-fetch": "^3.3.2"
+  }
+}

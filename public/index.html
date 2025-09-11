@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>996NearMe — 996nearme.com</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+  <style>
+    :root {
+      --bg-primary: #ffffff;
+      --bg-secondary: #f8f9fa;
+      --text-primary: #111111;
+      --text-secondary: #555555;
+      --text-muted: #666666;
+      --border-color: #eeeeee;
+      --input-bg: #ffffff;
+      --input-border: #dddddd;
+      --btn-primary-bg: #111111;
+      --btn-primary-color: #ffffff;
+      --btn-secondary-bg: #f3f4f6;
+      --btn-secondary-color: #111111;
+      --btn-secondary-border: #e5e7eb;
+      --badge-bg: #f3f4f6;
+      --badge-border: #e5e7eb;
+      --ask-bg: #fff8e1;
+      --ask-border: #f7e5a2;
+      --foot-bg: rgba(255,255,255,0.8);
+    }
+
+    [data-theme="dark"] {
+      --bg-primary: #1a1a1a;
+      --bg-secondary: #2d2d2d;
+      --text-primary: #ffffff;
+      --text-secondary: #cccccc;
+      --text-muted: #999999;
+      --border-color: #404040;
+      --input-bg: #2d2d2d;
+      --input-border: #404040;
+      --btn-primary-bg: #ffffff;
+      --btn-primary-color: #111111;
+      --btn-secondary-bg: #404040;
+      --btn-secondary-color: #ffffff;
+      --btn-secondary-border: #555555;
+      --badge-bg: #404040;
+      --badge-border: #555555;
+      --ask-bg: #3d3d1a;
+      --ask-border: #5a5a2a;
+      --foot-bg: rgba(26,26,26,0.8);
+    }
+
+    html, body { 
+      height: 100%; 
+      margin: 0; 
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      transition: background-color 0.3s ease, color 0.3s ease;
+    }
+    .app { display: grid; grid-template-columns: 320px 1fr; height: 100%; }
+    .panel { 
+      padding: 16px 16px 24px; 
+      border-right: 1px solid var(--border-color); 
+      display:flex; 
+      flex-direction:column; 
+      overflow: hidden;
+      background-color: var(--bg-primary);
+    }
+    .map { height: 100%; }
+    h1 { font-size: 18px; margin: 0 0 8px; color: var(--text-primary); }
+    label { display:block; font-size:12px; color:var(--text-secondary); margin-top:12px; padding: 0 8px;}
+    input, textarea { 
+      width: calc(100% - 16px); 
+      padding:8px; 
+      border:1px solid var(--input-border); 
+      border-radius:8px; 
+      margin: 0 8px;
+      background-color: var(--input-bg);
+      color: var(--text-primary);
+    }
+    textarea { resize: none; }
+    .btn { 
+      margin:16px 8px 0; 
+      width:calc(100% - 16px); 
+      padding:12px; 
+      border:none; 
+      border-radius:10px; 
+      font-weight:700; 
+      cursor:pointer;
+      transition: all 0.2s ease;
+    }
+    .btn-primary { background:var(--btn-primary-bg); color:var(--btn-primary-color); }
+    .btn-danger { background:var(--btn-secondary-bg); color:var(--btn-secondary-color); border:1px solid var(--btn-secondary-border); }
+    .btn-secondary { background:var(--btn-secondary-bg); color:var(--btn-secondary-color); border:1px solid var(--btn-secondary-border); }
+    .btn-share { background:#5ec00d; color:#fff; border:1px solid #ccc; }
+    .row { margin:8px 8px 0; font-size:12px; color:var(--text-secondary); }
+    .badge { display:inline-block; background:var(--badge-bg); border:1px solid var(--badge-border); padding:4px 8px; border-radius:999px; font-size:12px; }
+    .me { border: 2px solid var(--text-primary); }
+    .avatar { width: 28px; height: 28px; border-radius:50%; object-fit:cover; vertical-align:middle; margin-right:6px; }
+    .person { display:flex; align-items:center; gap:8px; margin:8px 8px 0; }
+    .list { margin:12px 0 0; flex:1; overflow:auto; }
+    .bottom { margin-top:auto; padding:12px 8px 0; }
+    .note { font-size:11px; color:var(--text-muted); margin-top:12px; }
+    .ask { margin:12px 8px 0; padding:8px; background:var(--ask-bg); border:1px solid var(--ask-border); border-radius:8px; font-size:13px; }
+    .foot { position: absolute; bottom: 8px; left: 8px; right: 330px; font-size:11px; background: var(--foot-bg); padding:4px 8px; border-radius:6px; z-index: 1000; }
+    .leaflet-div-icon { background: transparent; border: none; }
+    .pin { position: relative; }
+    .pin-badge { background:var(--btn-primary-bg); color:var(--btn-primary-color); padding:6px 8px; border-radius:12px; white-space:nowrap; font-size:13px; box-shadow:0 4px 12px rgba(0,0,0,0.25); }
+    .pin-emoji { margin-right:6px; }
+    .pin-pulse { position:absolute; left:50%; top:0; width:10px; height:10px; margin-top:6px; background:var(--btn-primary-bg); border-radius:999px; transform:translateX(-50%); box-shadow:0 0 0 0 rgba(17,17,17,0.5); animation:pulse 2s infinite; }
+    @keyframes pulse { 0% { box-shadow:0 0 0 0 rgba(17,17,17,0.5);} 70% { box-shadow:0 0 0 14px rgba(17,17,17,0);} 100% { box-shadow:0 0 0 0 rgba(17,17,17,0);} }
+    
+    .theme-toggle {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: var(--btn-secondary-bg);
+      border: 1px solid var(--btn-secondary-border);
+      border-radius: 8px;
+      padding: 8px;
+      cursor: pointer;
+      font-size: 16px;
+      color: var(--text-primary);
+      transition: all 0.2s ease;
+      z-index: 1001;
+    }
+    .theme-toggle:hover {
+      opacity: 0.8;
+    }
+  </style>
+</head>
+<body>
+  <button class="theme-toggle" id="themeToggle">🌙</button>
+  
+  <div class="app">
+    <div class="panel">
+      <h1>996NearMe.com</h1>
+      <div class="row">Tap <span class="badge">Lock In</span> to share your live pin.</div>
+
+      <label>Name</label>
+      <input id="name" placeholder="Your name" />
+
+      <label>𝕏 handle</label>
+      <input id="handle" placeholder="@heshiebee" value="@"/>
+
+      
+
+      <label>What are you working on?</label>
+      <textarea id="what" rows="3" placeholder="Shipping v0 of my budget app..."></textarea>
+
+      <button id="toggle" class="btn btn-primary">Lock In</button>
+      <button id="shareX" class="btn btn-share">Share to 𝕏</button>
+
+      <div id="nearby" class="row"></div>
+      <div id="askCafe" class="ask" style="display:none;"></div>
+
+      <div class="list" id="list"></div>
+
+      <div class="bottom">
+        <div class="note">
+          • Shares your live coordinates while locked in. Auto-removes after 1 hour of inactivity.<br/>
+          • Map © OpenStreetMap contributors, Tiles from OpenStreetMap. Please be nice to their servers.
+        </div>
+
+        <div style="margin-top:12px; margin-bottom:4px; display:flex; gap:8px; align-items:center;">
+          <button id="showAll" class="btn btn-secondary" style="margin:0;">Show All</button>
+          <span id="total" class="badge" style="margin-left:auto;">0 total</span>
+        </div>
+      </div>
+    </div>
+    <div id="map" class="map"></div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+  <script>
+    const ft100 = 30.48; // meters
+    let map, meMarker, circle;
+    const markers = new Map(); // id -> marker
+    let me = null; // { id, ... }
+    
+    // User persistence
+    const USER_STORAGE_KEY = '996nearme_user';
+    const THEME_STORAGE_KEY = '996nearme_theme';
+    let storedUser = null;
+    
+    function loadStoredUser() {
+      try {
+        const stored = localStorage.getItem(USER_STORAGE_KEY);
+        if (stored) {
+          storedUser = JSON.parse(stored);
+          // Pre-fill form with stored data
+          const nameInput = document.getElementById('name');
+          const handleInput = document.getElementById('handle');
+          const whatInput = document.getElementById('what');
+          if (nameInput && storedUser.name) nameInput.value = storedUser.name;
+          if (handleInput && storedUser.x_handle) handleInput.value = storedUser.x_handle;
+          if (whatInput && storedUser.what_working_on) whatInput.value = storedUser.what_working_on;
+        }
+      } catch (e) {
+        console.warn('Failed to load stored user:', e);
+      }
+    }
+    
+    function saveUser(user) {
+      try {
+        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+        storedUser = user;
+      } catch (e) {
+        console.warn('Failed to save user:', e);
+      }
+    }
+    
+    // Theme management
+    function initTheme() {
+      const savedTheme = localStorage.getItem(THEME_STORAGE_KEY) || 'light';
+      setTheme(savedTheme);
+    }
+    
+    function setTheme(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+      const toggle = document.getElementById('themeToggle');
+      if (toggle) {
+        toggle.textContent = theme === 'dark' ? '☀️' : '🌙';
+      }
+      localStorage.setItem(THEME_STORAGE_KEY, theme);
+    }
+    
+    function toggleTheme() {
+      const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+      const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+      setTheme(newTheme);
+    }
+
+    function initMap() {
+      map = L.map('map');
+      const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors',
+        subdomains: ['a','b','c']
+      });
+      osm.addTo(map);
+
+      // Try locate; fallback to NYC
+      map.setView([40.73061, -73.935242], 19);
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition((pos) => {
+          map.setView([pos.coords.latitude, pos.coords.longitude], 19);
+        });
+      }
+    }
+
+    function avatarHtml(u) {
+      const handle = u.x_handle ? `<span>${u.x_handle}</span>` : '';
+      const venue = u.is_venue && u.venue_name ? `<span class="badge">☕ ${u.venue_name}</span>` : '';
+      return `<div class="person">
+        <div>
+          <div><strong>${u.name}</strong> ${handle} ${venue}</div>
+          <div style="font-size:12px;color:#555;">${u.what_working_on || ""}</div>
+        </div>
+      </div>`;
+    }
+
+    function renderList(users) {
+      const el = document.getElementById('list');
+      el.innerHTML = users.map(avatarHtml).join('');
+      const total = document.getElementById('total');
+      if (total) total.textContent = `${users.length} total`;
+    }
+
+    function upsertMarker(u) {
+      const emoji = u.is_venue ? "☕" : "🚀";
+      const icon = L.divIcon({
+        className: u.id === me?.id ? "leaflet-div-icon me" : "leaflet-div-icon",
+        html: `<div class="pin">
+                 <div class="pin-badge">
+                   <span class="pin-emoji">${emoji}</span>
+                   ${u.name}
+                 </div>
+                 <div class="pin-pulse"></div>
+               </div>`
+      });
+
+      let m = markers.get(u.id);
+      if (!m) {
+        m = L.marker([u.lat, u.lon], { icon }).addTo(map).bindPopup(avatarHtml(u));
+        markers.set(u.id, m);
+      } else {
+        m.setLatLng([u.lat, u.lon]);
+        m.setIcon(icon);
+        m.setPopupContent(avatarHtml(u));
+      }
+      if (u.id === me?.id) {
+        if (!meMarker) meMarker = m;
+        if (circle) circle.setLatLng([u.lat, u.lon]); else circle = L.circle([u.lat, u.lon], {radius: ft100, weight:1}).addTo(map);
+      }
+    }
+
+    function removeMarker(id) {
+      const m = markers.get(id);
+      if (m) {
+        map.removeLayer(m);
+        markers.delete(id);
+      }
+    }
+
+    let showingAll = false;
+    let lastCenter = null;
+    let lastZoom = null;
+    function fitMapToAll() {
+      const latlngs = Array.from(markers.values()).map(m => m.getLatLng());
+      if (!showingAll) {
+        lastCenter = map.getCenter();
+        lastZoom = map.getZoom();
+      }
+      if (latlngs.length) {
+        const bounds = L.latLngBounds(latlngs);
+        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 19 });
+      }
+    }
+
+    async function fetchActive() {
+      const r = await fetch("/api/active");
+      return await r.json();
+    }
+
+    async function checkNearby(lat, lon) {
+      const r = await fetch(`/api/nearby?lat=${lat}&lon=${lon}`);
+      return await r.json();
+    }
+
+    async function checkCafes(lat, lon) {
+      const r = await fetch(`/api/cafes?lat=${lat}&lon=${lon}`);
+      return await r.json();
+    }
+
+    async function lockIn() {
+      // get location
+      if (!navigator.geolocation) {
+        alert("Geolocation not supported.");
+        return;
+      }
+      const nameInput = document.getElementById('name');
+      const handleInput = document.getElementById('handle');
+      const whatInput = document.getElementById('what');
+      const name = nameInput ? nameInput.value.trim() : '';
+      if (!name) { alert("Name required."); return; }
+
+      const x_handle_raw = handleInput ? handleInput.value.trim() : '';
+      const x_handle = x_handle_raw && x_handle_raw !== '@' ? x_handle_raw : '';
+      const photo_url = "";
+      const what = whatInput ? whatInput.value.trim() : '';
+
+      navigator.geolocation.getCurrentPosition(async (pos) => {
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+
+        // Ask if this is a cafe at your location
+        const cafes = await checkCafes(lat, lon);
+        let is_venue = false, venue_name = null;
+        const ask = document.getElementById('askCafe');
+        if (cafes.length) {
+          const c = cafes[0]; // nearest
+          ask.style.display = 'block';
+          ask.innerHTML = `Are you <strong>${c.name}</strong>? 
+            <div style="margin-top:6px;">
+              <button id="yesCafe" class="btn btn-primary" style="padding:6px 10px;width:auto;">Yes</button>
+              <button id="noCafe" class="btn btn-danger" style="padding:6px 10px;width:auto;">No</button>
+            </div>`;
+          await new Promise(resolve => {
+            document.getElementById('yesCafe').onclick = () => { is_venue = true; venue_name = c.name; ask.style.display='none'; resolve(); };
+            document.getElementById('noCafe').onclick  = () => { is_venue = false; venue_name = null; ask.style.display='none'; resolve(); };
+          });
+        } else {
+          ask.style.display = 'none';
+        }
+
+        const payload = {
+          id: me?.id, name, x_handle, photo_url, what_working_on: what,
+          lat, lon, is_venue, venue_name
+        };
+        const r = await fetch("/api/lockin", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const user = await r.json();
+        me = user;
+        saveUser(user); // Save to localStorage
+        upsertMarker(me);
+        map.setView([me.lat, me.lon], 19);
+        document.getElementById('toggle').textContent = "I'm done";
+        document.getElementById('toggle').className = "btn btn-danger";
+
+        // show nearby
+        const near = await checkNearby(lat, lon);
+        const others = near.filter(u => u.id !== me.id);
+        document.getElementById('nearby').textContent =
+          others.length ? `${others.length} locked-in 996’er(s) within 100 ft.` : "No one within 100 ft (yet). Be the beacon.";
+      }, err => {
+        alert("Location failed: " + err.message);
+      }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 });
+    }
+
+    async function done() {
+      if (!me?.id) return;
+      await fetch("/api/done", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: me.id })
+      });
+      removeMarker(me.id);
+      me = null;
+      if (circle) { map.removeLayer(circle); circle = null; }
+      document.getElementById('toggle').textContent = "Lock In";
+      document.getElementById('toggle').className = "btn btn-primary";
+      document.getElementById('nearby').textContent = "";
+    }
+
+    function setupSocket() {
+      const socket = io();
+      socket.on("presence:full", (users) => {
+        renderList(users);
+        users.forEach(upsertMarker);
+      });
+      socket.on("presence:update", (u) => {
+        upsertMarker(u);
+        fetchActive().then(renderList);
+      });
+      socket.on("presence:remove", ({ id }) => {
+        removeMarker(id);
+        fetchActive().then(renderList);
+      });
+    }
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      initTheme(); // Initialize theme
+      loadStoredUser(); // Load stored user data
+      initMap();
+      setTimeout(() => map.invalidateSize(), 100);
+      setupSocket();
+
+      // initial
+      const users = await fetchActive();
+      renderList(users);
+      users.forEach(upsertMarker);
+
+      // button
+      document.getElementById('toggle').addEventListener('click', async () => {
+        if (me?.id) await done(); else await lockIn();
+      });
+
+      // show all
+      document.getElementById('showAll').addEventListener('click', (e) => {
+        showingAll = !showingAll;
+        if (showingAll) {
+          e.currentTarget.textContent = 'Show Nearby';
+          fitMapToAll();
+        } else {
+          e.currentTarget.textContent = 'Show All';
+          if (lastCenter && lastZoom) map.setView(lastCenter, lastZoom);
+        }
+      });
+
+      // theme toggle
+      document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+
+      // share to X with static map
+      document.getElementById('shareX').addEventListener('click', () => {
+        const center = me?.id ? [me.lat, me.lon] : map.getCenter();
+        const zoom = map.getZoom();
+        const lat = typeof center[0] === 'number' ? center[0] : center.lat;
+        const lon = typeof center[1] === 'number' ? center[1] : center.lng;
+        const text = encodeURIComponent('Locking in on 996NearMe — 996nearme.com');
+        const imgUrl = `https://staticmap.openstreetmap.de/staticmap.php?center=${lat},${lon}&zoom=${zoom}&size=800x400&maptype=mapnik&markers=${lat},${lon},lightblue1`;
+        const url = `https://996nearme.com`;
+        
+        // Add meta tags for image preview
+        const meta = document.createElement('meta');
+        meta.setAttribute('property', 'og:image');
+        meta.setAttribute('content', imgUrl);
+        document.head.appendChild(meta);
+
+        const twitterMeta = document.createElement('meta'); 
+        twitterMeta.setAttribute('name', 'twitter:card');
+        twitterMeta.setAttribute('content', 'summary_large_image');
+        document.head.appendChild(twitterMeta);
+
+        const twitterImage = document.createElement('meta');
+        twitterImage.setAttribute('name', 'twitter:image');
+        twitterImage.setAttribute('content', imgUrl);
+        document.head.appendChild(twitterImage);
+
+        const intent = `https://twitter.com/intent/tweet?text=${text}&url=${encodeURIComponent(url)}&hashtags=996,shipping&via=heshiebrody`;
+        window.open(intent, '_blank');
+      });
+
+      // while locked in, refresh location every ~60s to keep alive
+      setInterval(async () => {
+        if (!me?.id || !navigator.geolocation) return;
+        navigator.geolocation.getCurrentPosition(async (pos) => {
+          const payload = {
+            ...me,
+            lat: pos.coords.latitude,
+            lon: pos.coords.longitude
+          };
+          const r = await fetch("/api/lockin", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+          const updated = await r.json();
+          me = updated;
+        });
+      }, 60000);
+    });
+  </script>
+</body>
+</html>
