@@ -503,6 +503,13 @@
         window.open(intent, '_blank');
       });
 
+      // Auto-refresh user list every 30 seconds
+      setInterval(async () => {
+        const users = await fetchActive();
+        renderList(users);
+        users.forEach(upsertMarker);
+      }, 30000);
+
       // while locked in, refresh location every ~60s to keep alive
       setInterval(async () => {
         if (!me?.id || !navigator.geolocation) return;

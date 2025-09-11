@@ -35,17 +35,12 @@ function haversine(lat1, lon1, lat2, lon2) {
   return 2 * R * Math.asin(Math.sqrt(a));
 }
 
-const CLEANUP_SECONDS = 3600; // 1 hour TTL if someone forgets to check out
-async function cleanupStale() {
-  const { rowCount } = await pool.query(
-    "DELETE FROM live_users WHERE updated_at < NOW() - INTERVAL '1 hour'"
-  );
-  if (rowCount) io.emit("presence:full", await getAllLive());
-}
-setInterval(cleanupStale, 60 * 1000);
+// No more auto-deletion - just filter by lock-in time
 
 async function getAllLive() {
-  const { rows } = await pool.query("SELECT * FROM live_users WHERE is_active=true ORDER BY updated_at DESC");
+  const { rows } = await pool.query(
+    "SELECT * FROM live_users WHERE is_active=true AND updated_at > NOW() - INTERVAL '1 hour' ORDER BY updated_at DESC"
+  );
   return rows;
 }
 
@@ -134,7 +129,9 @@ app.get("/api/nearby", async (req, res) => {
   if (Number.isNaN(lat) || Number.isNaN(lon)) {
     return res.status(400).json({ error: "lat/lon required" });
   }
-  const { rows } = await pool.query("SELECT * FROM live_users WHERE is_active=true");
+  const { rows } = await pool.query(
+    "SELECT * FROM live_users WHERE is_active=true AND updated_at > NOW() - INTERVAL '1 hour'"
+  );
   const within = rows.filter(r => haversine(lat, lon, r.lat, r.lon) <= 30.48);
   res.json(within);
 });
