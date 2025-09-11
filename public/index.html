@@ -21,24 +21,26 @@
   />
   <style>
     :root {
-      --bg-primary: #ffffff;
-      --bg-secondary: #f8f9fa;
+      /* Softer light theme that matches lavender primary */
+      --bg-primary: #ffffff; /* subtle lilac-tinted gray */
+      --bg-secondary: #ffffff;
       --text-primary: #111111;
       --text-secondary: #555555;
       --text-muted: #666666;
       --border-color: #eeeeee;
       --input-bg: #ffffff;
       --input-border: #dddddd;
-      --btn-primary-bg: #111111;
+      --btn-primary-bg: #bfbaff; /* lavender */
       --btn-primary-color: #ffffff;
       --btn-secondary-bg: #f3f4f6;
       --btn-secondary-color: #111111;
       --btn-secondary-border: #e5e7eb;
       --badge-bg: #f3f4f6;
       --badge-border: #e5e7eb;
+      --badge-text: #111111;
       --ask-bg: #fff8e1;
       --ask-border: #f7e5a2;
-      --foot-bg: rgba(255,255,255,0.8);
+      --foot-bg: rgba(255,255,255,0.85);
     }
 
     [data-theme="dark"] {
@@ -57,6 +59,7 @@
       --btn-secondary-border: #555555;
       --badge-bg: #404040;
       --badge-border: #555555;
+      --badge-text: #ffffff;
       --ask-bg: #3d3d1a;
       --ask-border: #5a5a2a;
       --foot-bg: rgba(26,26,26,0.8);
@@ -109,6 +112,10 @@
         transition: height 0.3s ease;
         z-index: 1000;
         -webkit-overflow-scrolling: touch;
+        border-top-left-radius: 16px;
+        border-top-right-radius: 16px;
+        box-shadow: 0 -10px 30px rgba(0,0,0,0.15);
+        padding-bottom: calc(24px + env(safe-area-inset-bottom));
       }
       
       .panel.open {
@@ -127,9 +134,10 @@
       .map { 
         height: 100vh;
         width: 100%;
+        background: #e9eaf6; /* subtle map backdrop while tiles load */
       }
     }
-    h1 { font-size: 18px; margin: 0 0 8px; color: var(--text-primary); }
+    h1 { font-size: 20px; margin: 0 0 8px; color: var(--text-primary); }
     label { display:block; font-size:12px; color:var(--text-secondary); margin-top:12px; padding: 0 8px;}
     
     @media (max-width: 768px) {
@@ -189,16 +197,27 @@
     .btn-secondary { background:var(--btn-secondary-bg); color:var(--btn-secondary-color); border:1px solid var(--btn-secondary-border); }
     .btn-share { background:#5ec00d; color:#fff; border:1px solid #ccc; }
     .row { margin:8px 8px 0; font-size:12px; color:var(--text-secondary); }
-    .badge { display:inline-block; background:var(--badge-bg); border:1px solid var(--badge-border); padding:4px 8px; border-radius:25px; font-size:12px; }
+    .badge { display:inline-block; background:var(--badge-bg); border:1px solid var(--badge-border); padding:4px 8px; border-radius:25px; font-size:12px; color: var(--badge-text); font-weight:600; }
     .me { border: 2px solid var(--text-primary); }
     .avatar { width: 28px; height: 28px; border-radius:50%; object-fit:cover; vertical-align:middle; margin-right:6px; }
-    .person { display:flex; align-items:center; gap:8px; margin:8px 8px 0; }
+    .person { display:flex; align-items:flex-start; gap:8px; margin:8px 8px 0; }
+    .person-content { display:flex; flex-direction:column; gap:6px; }
+    .line-top { display:flex; flex-wrap:wrap; align-items:baseline; gap:8px 12px; }
+    .line-meta { display:flex; flex-wrap:wrap; gap:8px; }
+    .subtitle { font-size:12px; color: var(--text-secondary); }
+    .handle { opacity: 0.8; }
     .list { margin:12px 0 0; flex:1; overflow:auto; }
-    .user-me { background: var(--btn-primary-bg); color: var(--btn-primary-color); padding: 8px; border-radius: 8px; margin-bottom: 8px; }
+    .user-me { background: var(--btn-primary-bg); color: var(--btn-primary-color); padding: 16px; border-radius: 18px; margin-bottom: 12px; position: relative; }
     .user-me .person { margin: 0; }
-    .user-me strong { color: var(--btn-primary-color); }
+    .user-me .person-content { gap: 6px; }
+    .user-me .line-top { align-items: center; gap: 10px; }
+    .user-me strong { color: var(--btn-primary-color); font-size: 22px; line-height: 1.1; }
+    .user-me .handle { color: var(--btn-primary-color); opacity: 0.9; white-space: nowrap; font-weight: 600; font-size: 16px; }
+    .user-me .line-meta { margin-top: 2px; }
+    .user-me .badge { background: rgba(255,255,255,0.22); border-color: transparent; color: var(--btn-primary-color); padding: 6px 10px; }
+    .user-me .subtitle { color: var(--btn-primary-color); opacity: 0.95; font-size: 14px; margin-top: 2px; }
     .user-me::after { content: "You"; display: block; text-align: center; font-size: 10px; margin-top: 4px; opacity: 0.8; }
-    .user-list { max-height: 120px; overflow-y: auto; }
+    .user-list { max-height: 160px; overflow-y: auto; }
     .user-list .person { margin: 4px 0; padding: 4px; border-radius: 6px; transition: background-color 0.2s ease; }
     .user-list .person:hover { background-color: var(--btn-secondary-bg); }
     .bottom { margin-top:auto; padding:12px 8px 0; }
@@ -487,14 +506,9 @@
     }
 
     function avatarHtml(u) {
-      const handle = u.x_handle ? `<span>${u.x_handle}</span>` : '';
-      const venue = u.is_venue && u.venue_name ? `<span class="badge">☕ ${u.venue_name}</span>` : '';
-      return `<div class="person" data-user-id="${u.id}">
-        <div>
-          <div><strong>${u.name}</strong> ${handle} ${venue}</div>
-          <div style="font-size:12px;color:#555;">${u.what_working_on || ""}</div>
-        </div>
-      </div>`;
+      const handle = u.x_handle ? `<span class=\"handle\">${u.x_handle}</span>` : '';
+      const venue = u.is_venue && u.venue_name ? `<span class=\"badge\">☕ ${u.venue_name}</span>` : '';
+      return `<div class=\"person\" data-user-id=\"${u.id}\">\n        <div class=\"person-content\">\n          <div class=\"line-top\"><strong>${u.name}</strong> ${handle}</div>\n          ${venue ? `<div class=\\"line-meta\\">${venue}</div>` : ''}\n          <div class=\"subtitle\">${u.what_working_on || ""}</div>\n        </div>\n      </div>`;
     }
 
     function renderList(users) {
@@ -623,6 +637,17 @@
       }
     }
 
+    // Fit map to a radius (in meters) around a center point
+    function fitMapToRadius(lat, lon, radiusMeters) {
+      try {
+        const bounds = L.circle([lat, lon], { radius: radiusMeters }).getBounds();
+        map.fitBounds(bounds, { padding: [40, 40] });
+      } catch (_e) {
+        // Fallback to setting a reasonable zoom if bounds calc fails
+        map.setView([lat, lon], 12);
+      }
+    }
+
     async function fetchActive(useNearbyFilter = false) {
       let url = "/api/active";
       if (me) {
@@ -685,7 +710,7 @@
         if (cafes.length) {
           const c = cafes[0]; // nearest
           ask.style.display = 'block';
-          ask.innerHTML = `Are you <strong>${c.name}</strong>? 
+          ask.innerHTML = `Are you at <strong>${c.name}</strong>? 
             <div style="margin-top:6px;">
               <button id="yesCafe" class="btn btn-primary" style="padding:6px 10px;width:auto;">Yes</button>
               <button id="noCafe" class="btn btn-danger" style="padding:6px 10px;width:auto;">No</button>
@@ -817,15 +842,31 @@
         if (me?.id) await done(); else await lockIn();
       });
 
-      // show all
+      // show all (5 miles) / nearby (100 ft)
       document.getElementById('showAll').addEventListener('click', async (e) => {
         showingAll = !showingAll;
         if (showingAll) {
           e.currentTarget.textContent = 'Show Nearby';
-          fitMapToAll();
+          // Save current view to restore later
+          lastCenter = map.getCenter();
+          lastZoom = map.getZoom();
+          if (me?.id) {
+            // 5 miles in meters
+            fitMapToRadius(me.lat, me.lon, 8046.72);
+          } else {
+            fitMapToAll();
+          }
+          setTimeout(() => map.invalidateSize(), 150);
         } else {
           e.currentTarget.textContent = 'Show 5 Miles';
-          fitMapToAll();
+          if (lastCenter && lastZoom) {
+            map.setView(lastCenter, lastZoom);
+          } else if (me?.id) {
+            map.setView([me.lat, me.lon], 17);
+          } else {
+            fitMapToAll();
+          }
+          setTimeout(() => map.invalidateSize(), 150);
         }
         
         // Refresh the user list and markers with new filter
