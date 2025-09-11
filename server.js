@@ -227,6 +227,66 @@ io.on("connection", async (socket) => {
   socket.emit("presence:full", await getAllLive());
 });
 
+// Link preview page that serves Open Graph / Twitter meta with a static map
+app.get(["/share/:id", "/share"], async (req, res) => {
+  try {
+    const id = req.params.id;
+    let user = null;
+    if (id) {
+      const r = await pool.query("SELECT * FROM live_users WHERE id=$1 AND is_active=true AND updated_at > NOW() - INTERVAL '1 hour'", [id]);
+      user = r.rows[0] || null;
+    }
+
+    const siteUrl = process.env.SITE_URL || (req.protocol + '://' + req.get('host'));
+    const shareUrl = req.protocol + '://' + req.get('host') + req.originalUrl;
+    const title = user ? `${user.name} is locked in on 996NearMe` : `996NearMe — Lock in and meet nearby builders`;
+    const desc = user ? `Join ${user.name}${user.venue_name ? ` at ${user.venue_name}` : ''} and other 996’ers nearby.` : `Share your live pin and see who is building around you.`;
+
+    // Build a static map image URL (OSM staticmap). If no user, show NYC default.
+    const lat = user?.lat ?? 40.73061;
+    const lon = user?.lon ?? -73.935242;
+    const zoom = user ? 16 : 12;
+    const markerColor = user ? 'red1' : 'lightblue1';
+    const imgUrl = `https://staticmap.openstreetmap.de/staticmap.php?center=${lat},${lon}&zoom=${zoom}&size=800x418&maptype=mapnik&markers=${lat},${lon},${markerColor}`;
+
+    // Serve minimal HTML with OG/Twitter tags for crawlers, and redirect humans to the app
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.status(200).send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>${title}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="canonical" href="${shareUrl}" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="${title}" />
+  <meta property="og:description" content="${desc}" />
+  <meta property="og:url" content="${shareUrl}" />
+  <meta property="og:image" content="${imgUrl}" />
+  <meta property="og:image:width" content="800" />
+  <meta property="og:image:height" content="418" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="${title}" />
+  <meta name="twitter:description" content="${desc}" />
+  <meta name="twitter:image" content="${imgUrl}" />
+  <meta name="robots" content="noindex" />
+</head>
+<body>
+  <p><a href="${siteUrl}">Open 996NearMe</a></p>
+  <script>
+    (function(){
+      var isBot = /bot|crawl|spider|slurp|facebookexternalhit|twitterbot|linkedinbot|slackbot/i.test(navigator.userAgent);
+      if(!isBot){ setTimeout(function(){ location.replace(${JSON.stringify(siteUrl)}); }, 500); }
+    })();
+  </script>
+</body>
+</html>`);
+  } catch (e) {
+    console.error(e);
+    res.redirect(302, "/");
+  }
+});
+
 const port = process.env.PORT || 3000;
 server.listen(port, () => {
   console.log(`996'ers Near Me running on http://localhost:${port}`);

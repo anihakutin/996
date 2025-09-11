@@ -200,22 +200,18 @@
     .badge { display:inline-block; background:var(--badge-bg); border:1px solid var(--badge-border); padding:4px 8px; border-radius:25px; font-size:12px; color: var(--badge-text); font-weight:600; }
     .me { border: 2px solid var(--text-primary); }
     .avatar { width: 28px; height: 28px; border-radius:50%; object-fit:cover; vertical-align:middle; margin-right:6px; }
-    .person { display:flex; align-items:flex-start; gap:8px; margin:8px 8px 0; }
-    .person-content { display:flex; flex-direction:column; gap:6px; }
-    .line-top { display:flex; flex-wrap:wrap; align-items:baseline; gap:8px 12px; }
-    .line-meta { display:flex; flex-wrap:wrap; gap:8px; }
+    .person { display:flex; align-items:center; gap:8px; margin:8px 8px 0; }
+    .one-line { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .one-line strong { font-weight:800; }
+    .one-line .handle { opacity:0.85; }
+    .one-line .venue { opacity:0.9; }
     .subtitle { font-size:12px; color: var(--text-secondary); }
     .handle { opacity: 0.8; }
     .list { margin:12px 0 0; flex:1; overflow:auto; }
-    .user-me { background: var(--btn-primary-bg); color: var(--btn-primary-color); padding: 16px; border-radius: 18px; margin-bottom: 12px; position: relative; }
+    .user-me { background: var(--btn-primary-bg); color: var(--btn-primary-color); padding: 12px; border-radius: 14px; margin-bottom: 12px; }
     .user-me .person { margin: 0; }
-    .user-me .person-content { gap: 6px; }
-    .user-me .line-top { align-items: center; gap: 10px; }
-    .user-me strong { color: var(--btn-primary-color); font-size: 22px; line-height: 1.1; }
-    .user-me .handle { color: var(--btn-primary-color); opacity: 0.9; white-space: nowrap; font-weight: 600; font-size: 16px; }
-    .user-me .line-meta { margin-top: 2px; }
-    .user-me .badge { background: rgba(255,255,255,0.22); border-color: transparent; color: var(--btn-primary-color); padding: 6px 10px; }
-    .user-me .subtitle { color: var(--btn-primary-color); opacity: 0.95; font-size: 14px; margin-top: 2px; }
+    .user-me .one-line { color: var(--btn-primary-color); }
+    .user-me .one-line .handle, .user-me .one-line .venue { color: var(--btn-primary-color); }
     .user-me::after { content: "You"; display: block; text-align: center; font-size: 10px; margin-top: 4px; opacity: 0.8; }
     .user-list { max-height: 160px; overflow-y: auto; }
     .user-list .person { margin: 4px 0; padding: 4px; border-radius: 6px; transition: background-color 0.2s ease; }
@@ -257,6 +253,7 @@
     .theme-toggle:hover {
       opacity: 0.8;
     }
+    .hidden { display: none; }
     
     @media (max-width: 768px) {
       .theme-toggle {
@@ -339,7 +336,7 @@
     <div class="panel" id="panel">
       <div class="drawer-handle" id="drawerHandle"></div>
       <h1>996NearMe.com</h1>
-      <div class="row">Tap <span class="badge">Lock In</span> to share your live pin.</div>
+      <div class="row" id="headerNote">Tap <span class="badge">Lock In</span> to share your live pin.</div>
 
       <label>Name</label>
       <input id="name" placeholder="Your name" />
@@ -506,9 +503,10 @@
     }
 
     function avatarHtml(u) {
-      const handle = u.x_handle ? `<span class=\"handle\">${u.x_handle}</span>` : '';
-      const venue = u.is_venue && u.venue_name ? `<span class=\"badge\">☕ ${u.venue_name}</span>` : '';
-      return `<div class=\"person\" data-user-id=\"${u.id}\">\n        <div class=\"person-content\">\n          <div class=\"line-top\"><strong>${u.name}</strong> ${handle}</div>\n          ${venue ? `<div class=\\"line-meta\\">${venue}</div>` : ''}\n          <div class=\"subtitle\">${u.what_working_on || ""}</div>\n        </div>\n      </div>`;
+      const hRaw = u.x_handle ? (u.x_handle.startsWith('@') ? u.x_handle : '@' + u.x_handle) : '';
+      const handle = hRaw ? ` (<span class=\"handle\">${hRaw}</span>)` : '';
+      const venue = (u.is_venue && u.venue_name) ? ` <span class=\"venue\">now at ${u.venue_name}</span>` : '';
+      return `<div class=\"person\" data-user-id=\"${u.id}\">\n        <div class=\"one-line\"><strong>${u.name}</strong>${handle}${venue}</div>\n      </div>`;
     }
 
     function renderList(users) {
@@ -744,6 +742,13 @@
         toggleBtn.disabled = false;
         toggleBtn.style.opacity = '1';
         
+        // Hide input fields while locked in and update header note
+        const formEls = ['name','handle','what'].map(id => document.getElementById(id));
+        formEls.forEach(el => el && el.classList.add('hidden'));
+        document.querySelectorAll('.panel label').forEach(el => el.classList.add('hidden'));
+        const headerNote = document.getElementById('headerNote');
+        if (headerNote) headerNote.innerHTML = `Tap <span class=\"badge\">I'm done</span> when you want to stop sharing.`;
+
         // Close drawer on mobile after successful lock-in
         if (window.innerWidth <= 768) {
           closeDrawer();
@@ -754,6 +759,12 @@
         const others = near.filter(u => u.id !== me.id);
         document.getElementById('nearby').textContent =
           others.length ? `${others.length} locked-in 996’er(s) within 100 ft.` : "No one within 100 ft (yet). Be the beacon.";
+
+        // Refresh list now that we're locked in so "You" appears immediately
+        try {
+          const usersNow = await fetchActive(!showingAll);
+          renderList(usersNow);
+        } catch (_e) {}
       }, err => {
         alert("Location failed: " + err.message);
         // Restore button state on error
@@ -776,6 +787,13 @@
       document.getElementById('toggle').textContent = "Lock In";
       document.getElementById('toggle').className = "btn btn-primary";
       document.getElementById('nearby').textContent = "";
+
+      // Show input fields again and restore header note
+      const formEls = ['name','handle','what'].map(id => document.getElementById(id));
+      formEls.forEach(el => el && el.classList.remove('hidden'));
+      document.querySelectorAll('.panel label').forEach(el => el.classList.remove('hidden'));
+      const headerNote = document.getElementById('headerNote');
+      if (headerNote) headerNote.innerHTML = `Tap <span class=\"badge\">Lock In</span> to share your live pin.`;
     }
 
     function setupSocket() {
@@ -787,6 +805,10 @@
       socket.on("presence:update", (u) => {
         upsertMarker(u);
         fetchActive(!showingAll).then(renderList);
+        // If the event is about me, ensure my local state is in sync and visible
+        if (storedUser?.id && u.id === storedUser.id) {
+          me = u;
+        }
       });
       socket.on("presence:remove", ({ id }) => {
         removeMarker(id);
@@ -829,6 +851,12 @@
           }
           // Update stored user with latest data
           saveUser(activeUser);
+          // Hide the form and update header since user is still locked in
+          const formEls = ['name','handle','what'].map(id => document.getElementById(id));
+          formEls.forEach(el => el && el.classList.add('hidden'));
+          document.querySelectorAll('.panel label').forEach(el => el.classList.add('hidden'));
+          const headerNote = document.getElementById('headerNote');
+          if (headerNote) headerNote.innerHTML = `Tap <span class=\"badge\">I'm done</span> when you want to stop sharing.`;
         } else {
           // User is no longer active, clear stored data
           localStorage.removeItem(USER_STORAGE_KEY);
@@ -932,9 +960,9 @@
         const userMarker = `${me.lat},${me.lon},red1`;
         const allMarkers = [userMarker, ...visibleMarkers.filter(m => m !== userMarker)].join('|');
         
-        const text = encodeURIComponent(`I'm locked in on 996NearMe — 996nearme.com`);
+        const text = encodeURIComponent(`I'm locked in on 996NearMe dot com`);
         const imgUrl = `https://staticmap.openstreetmap.de/staticmap.php?center=${center[0]},${center[1]}&zoom=${zoom}&size=800x400&maptype=mapnik&markers=${allMarkers}`;
-        const url = `https://996nearme.com`;
+        const url = `${location.origin}/share/${encodeURIComponent(me.id)}`;
         
         // Add comprehensive meta tags for image previews across all platforms
         const metaTags = [
