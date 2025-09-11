@@ -70,8 +70,9 @@
     @media (max-width: 768px) {
       .app { 
         grid-template-columns: 1fr; 
-        grid-template-rows: 1fr auto;
+        grid-template-rows: 1fr;
         height: 100vh;
+        position: relative;
       }
     }
     
@@ -86,21 +87,37 @@
     
     @media (max-width: 768px) {
       .panel { 
-        border-right: none; 
-        border-bottom: 1px solid var(--border-color);
-        height: 100%;
-        overflow-y: auto;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: var(--bg-primary);
+        border-top: 1px solid var(--border-color);
+        border-right: none;
+        border-bottom: none;
+        height: 0;
+        overflow: hidden;
+        transition: height 0.3s ease;
+        z-index: 1000;
         -webkit-overflow-scrolling: touch;
+      }
+      
+      .panel.open {
+        height: 80vh;
+        overflow-y: auto;
+      }
+      
+      .panel.partial {
+        height: 40vh;
+        overflow-y: auto;
       }
     }
     .map { height: 100%; }
     
     @media (max-width: 768px) {
       .map { 
-        height: 25vh;
-        min-height: 25vh;
-        max-height: 25vh;
-        flex-shrink: 0;
+        height: 100vh;
+        width: 100%;
       }
     }
     h1 { font-size: 18px; margin: 0 0 8px; color: var(--text-primary); }
@@ -226,13 +243,73 @@
         touch-action: manipulation;
       }
     }
+    
+    /* Mobile drawer tab button */
+    .drawer-tab {
+      display: none;
+    }
+    
+    @media (max-width: 768px) {
+      .drawer-tab {
+        display: flex;
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--btn-primary-bg);
+        color: var(--btn-primary-color);
+        border: none;
+        border-radius: 25px;
+        padding: 12px 24px;
+        font-size: 14px;
+        font-weight: 700;
+        cursor: pointer;
+        z-index: 1001;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+        transition: all 0.2s ease;
+      }
+      
+      .drawer-tab:hover {
+        transform: translateX(-50%) translateY(-2px);
+        box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+      }
+      
+      .drawer-tab:active {
+        transform: translateX(-50%) translateY(0);
+      }
+    }
+    
+    /* Drawer handle */
+    .drawer-handle {
+      display: none;
+    }
+    
+    @media (max-width: 768px) {
+      .drawer-handle {
+        display: block;
+        position: absolute;
+        top: 8px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 40px;
+        height: 4px;
+        background: var(--border-color);
+        border-radius: 2px;
+        cursor: pointer;
+        touch-action: manipulation;
+      }
+    }
   </style>
 </head>
 <body>
   <button class="theme-toggle" id="themeToggle">🌙</button>
+  <button class="drawer-tab" id="drawerTab">Controls</button>
   
   <div class="app">
-    <div class="panel">
+    <div class="panel" id="panel">
+      <div class="drawer-handle" id="drawerHandle"></div>
       <h1>996NearMe.com</h1>
       <div class="row">Tap <span class="badge">Lock In</span> to share your live pin.</div>
 
@@ -478,6 +555,38 @@
     let showingAll = false;
     let lastCenter = null;
     let lastZoom = null;
+    
+    // Mobile drawer state
+    let drawerState = 'closed'; // 'closed', 'partial', 'open'
+    
+    function toggleDrawer() {
+      const panel = document.getElementById('panel');
+      const tab = document.getElementById('drawerTab');
+      
+      if (drawerState === 'closed') {
+        drawerState = 'partial';
+        panel.classList.add('partial');
+        tab.textContent = '↑ More';
+      } else if (drawerState === 'partial') {
+        drawerState = 'open';
+        panel.classList.remove('partial');
+        panel.classList.add('open');
+        tab.textContent = '↓ Less';
+      } else {
+        drawerState = 'closed';
+        panel.classList.remove('partial', 'open');
+        tab.textContent = 'Controls';
+      }
+    }
+    
+    function closeDrawer() {
+      const panel = document.getElementById('panel');
+      const tab = document.getElementById('drawerTab');
+      drawerState = 'closed';
+      panel.classList.remove('partial', 'open');
+      tab.textContent = 'Controls';
+    }
+    
     function fitMapToAll() {
       const latlngs = Array.from(markers.values()).map(m => m.getLatLng());
       if (!showingAll) {
@@ -515,12 +624,22 @@
       const handleInput = document.getElementById('handle');
       const whatInput = document.getElementById('what');
       const name = nameInput ? nameInput.value.trim() : '';
-      if (!name) { alert("Name required."); return; }
+      if (!name) { 
+        alert("Name required."); 
+        return; 
+      }
 
       const x_handle_raw = handleInput ? handleInput.value.trim() : '';
       const x_handle = x_handle_raw && x_handle_raw !== '@' ? x_handle_raw : '';
       const photo_url = "";
       const what = whatInput ? whatInput.value.trim() : '';
+
+      // Show loading state
+      const toggleBtn = document.getElementById('toggle');
+      const originalText = toggleBtn.textContent;
+      toggleBtn.textContent = "Getting location...";
+      toggleBtn.disabled = true;
+      toggleBtn.style.opacity = '0.7';
 
       navigator.geolocation.getCurrentPosition(async (pos) => {
         const lat = pos.coords.latitude;
@@ -560,8 +679,17 @@
         saveUser(user); // Save to localStorage
         upsertMarker(me);
         map.setView([me.lat, me.lon], 19);
-        document.getElementById('toggle').textContent = "I'm done";
-        document.getElementById('toggle').className = "btn btn-danger";
+        
+        // Restore button state
+        toggleBtn.textContent = "I'm done";
+        toggleBtn.className = "btn btn-danger";
+        toggleBtn.disabled = false;
+        toggleBtn.style.opacity = '1';
+        
+        // Close drawer on mobile after successful lock-in
+        if (window.innerWidth <= 768) {
+          closeDrawer();
+        }
 
         // show nearby
         const near = await checkNearby(lat, lon);
@@ -570,6 +698,10 @@
           others.length ? `${others.length} locked-in 996’er(s) within 100 ft.` : "No one within 100 ft (yet). Be the beacon.";
       }, err => {
         alert("Location failed: " + err.message);
+        // Restore button state on error
+        toggleBtn.textContent = originalText;
+        toggleBtn.disabled = false;
+        toggleBtn.style.opacity = '1';
       }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 });
     }
 
@@ -666,6 +798,38 @@
 
       // theme toggle
       document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+      
+      // mobile drawer controls
+      document.getElementById('drawerTab').addEventListener('click', toggleDrawer);
+      document.getElementById('drawerHandle').addEventListener('click', toggleDrawer);
+      
+      // Add touch gesture support for drawer
+      let startY = 0;
+      let currentY = 0;
+      let isDragging = false;
+      
+      const panel = document.getElementById('panel');
+      
+      panel.addEventListener('touchstart', (e) => {
+        startY = e.touches[0].clientY;
+        isDragging = true;
+      });
+      
+      panel.addEventListener('touchmove', (e) => {
+        if (!isDragging) return;
+        currentY = e.touches[0].clientY;
+        const deltaY = currentY - startY;
+        
+        // If swiping down and drawer is open, close it
+        if (deltaY > 50 && (drawerState === 'open' || drawerState === 'partial')) {
+          closeDrawer();
+          isDragging = false;
+        }
+      });
+      
+      panel.addEventListener('touchend', () => {
+        isDragging = false;
+      });
 
       // share to X with static map
       document.getElementById('shareX').addEventListener('click', () => {
