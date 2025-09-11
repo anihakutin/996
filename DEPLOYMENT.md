@@ -39,8 +39,8 @@ ssh root@YOUR_SERVER_IP
 # Update system
 apt update && apt upgrade -y
 
-# Install PostgreSQL
-apt install postgresql postgresql-contrib -y
+# Install PostgreSQL with PostGIS extension
+apt install postgresql postgresql-contrib postgis postgresql-15-postgis-3 -y
 
 # Start and enable PostgreSQL
 systemctl start postgresql

@@ -1,4 +1,7 @@
 -- db.sql
+-- Enable PostGIS extension for geographic calculations
+CREATE EXTENSION IF NOT EXISTS postgis;
+
 CREATE TABLE IF NOT EXISTS live_users (
   id UUID PRIMARY KEY,
   name TEXT NOT NULL,
@@ -18,6 +21,9 @@ CREATE INDEX IF NOT EXISTS live_users_updated_idx ON live_users (updated_at DESC
 CREATE INDEX IF NOT EXISTS live_users_geo_idx ON live_users (lat, lon);
 CREATE INDEX IF NOT EXISTS live_users_x_handle_idx ON live_users (x_handle);
 CREATE INDEX IF NOT EXISTS live_users_active_idx ON live_users (is_active);
+
+-- Add spatial index for PostGIS distance queries
+CREATE INDEX IF NOT EXISTS live_users_spatial_idx ON live_users USING GIST (ST_GeogFromText('POINT(' || lon || ' ' || lat || ')'));
 
 -- Add is_active column to existing tables (if it doesn't exist)
 ALTER TABLE live_users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;

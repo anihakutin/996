@@ -1,6 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-L85T9YNHHR"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-L85T9YNHHR');
+  </script>
   <meta charset="UTF-8" />
   <title>996NearMe — 996nearme.com</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
@@ -338,7 +347,7 @@
         </div>
 
         <div style="margin-top:12px; margin-bottom:4px; padding-bottom:16px; display:flex; gap:8px; align-items:center;">
-          <button id="showAll" class="btn btn-secondary" style="margin:0;">Show All</button>
+          <button id="showAll" class="btn btn-secondary" style="margin:0;">Show 5 Miles</button>
           <span id="total" class="badge" style="margin-left:auto;">0 total</span>
         </div>
       </div>
@@ -357,6 +366,19 @@
     let map, meMarker, circle;
     const markers = new Map(); // id -> marker
     let me = null; // { id, ... }
+    
+    // Haversine distance calculation (meters)
+    function haversine(lat1, lon1, lat2, lon2) {
+      const R = 6371000; // Earth's radius in meters
+      const toRad = deg => (deg * Math.PI) / 180;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+        Math.sin(dLon / 2) ** 2;
+      return 2 * R * Math.asin(Math.sqrt(a));
+    }
     
     // User persistence
     const USER_STORAGE_KEY = '996nearme_user';
@@ -519,6 +541,7 @@
     function upsertMarker(u) {
       const emoji = getEmojiForUser(u.id);
       const currentUserId = me?.id || storedUser?.id;
+      
       const icon = L.divIcon({
         className: u.id === currentUserId ? "leaflet-div-icon me" : "leaflet-div-icon",
         html: `<div class="pin">
@@ -538,6 +561,7 @@
         m.setIcon(icon);
         m.setPopupContent(avatarHtml(u));
       }
+      
       if (u.id === currentUserId) {
         if (!meMarker) meMarker = m;
         if (circle) circle.setLatLng([u.lat, u.lon]); else circle = L.circle([u.lat, u.lon], {radius: ft100, weight:1}).addTo(map);
@@ -552,7 +576,7 @@
       }
     }
 
-    let showingAll = false;
+    let showingAll = false; // false = nearby (100ft), true = 5 miles
     let lastCenter = null;
     let lastZoom = null;
     
@@ -599,8 +623,17 @@
       }
     }
 
-    async function fetchActive() {
-      const r = await fetch("/api/active");
+    async function fetchActive(useNearbyFilter = false) {
+      let url = "/api/active";
+      if (me) {
+        // Always pass coordinates since we now require them for both modes
+        const nearbyParam = useNearbyFilter ? 'true' : 'false';
+        url += `?nearby=${nearbyParam}&lat=${me.lat}&lon=${me.lon}`;
+      } else {
+        // If no user location, return empty array
+        return [];
+      }
+      const r = await fetch(url);
       return await r.json();
     }
 
@@ -728,11 +761,11 @@
       });
       socket.on("presence:update", (u) => {
         upsertMarker(u);
-        fetchActive().then(renderList);
+        fetchActive(!showingAll).then(renderList);
       });
       socket.on("presence:remove", ({ id }) => {
         removeMarker(id);
-        fetchActive().then(renderList);
+        fetchActive(!showingAll).then(renderList);
       });
     }
 
@@ -755,7 +788,7 @@
       setupSocket();
 
       // initial
-      const users = await fetchActive();
+      const users = await fetchActive(!showingAll);
       renderList(users);
       users.forEach(upsertMarker);
       
@@ -785,15 +818,20 @@
       });
 
       // show all
-      document.getElementById('showAll').addEventListener('click', (e) => {
+      document.getElementById('showAll').addEventListener('click', async (e) => {
         showingAll = !showingAll;
         if (showingAll) {
           e.currentTarget.textContent = 'Show Nearby';
           fitMapToAll();
         } else {
-          e.currentTarget.textContent = 'Show All';
-          if (lastCenter && lastZoom) map.setView(lastCenter, lastZoom);
+          e.currentTarget.textContent = 'Show 5 Miles';
+          fitMapToAll();
         }
+        
+        // Refresh the user list and markers with new filter
+        const users = await fetchActive(!showingAll);
+        renderList(users);
+        users.forEach(upsertMarker);
       });
 
       // theme toggle
@@ -833,37 +871,72 @@
 
       // share to X with static map
       document.getElementById('shareX').addEventListener('click', () => {
-        const center = me?.id ? [me.lat, me.lon] : map.getCenter();
-        const zoom = map.getZoom();
-        const lat = typeof center[0] === 'number' ? center[0] : center.lat;
-        const lon = typeof center[1] === 'number' ? center[1] : center.lng;
-        const text = encodeURIComponent('Locking in on 996NearMe — 996nearme.com');
-        const imgUrl = `https://staticmap.openstreetmap.de/staticmap.php?center=${lat},${lon}&zoom=${zoom}&size=800x400&maptype=mapnik&markers=${lat},${lon},lightblue1`;
+        if (!me?.id) {
+          alert('Please lock in first to share your location!');
+          return;
+        }
+        
+        const center = [me.lat, me.lon];
+        const zoom = Math.min(map.getZoom(), 16); // Cap zoom for better overview
+        
+        // Create markers string for all visible users
+        const visibleMarkers = Array.from(markers.values())
+          .filter(marker => map.hasLayer(marker))
+          .map(marker => {
+            const latLng = marker.getLatLng();
+            return `${latLng.lat},${latLng.lng},lightblue1`;
+          });
+        
+        // Add current user marker in different color
+        const userMarker = `${me.lat},${me.lon},red1`;
+        const allMarkers = [userMarker, ...visibleMarkers.filter(m => m !== userMarker)].join('|');
+        
+        const text = encodeURIComponent(`I'm locked in on 996NearMe — 996nearme.com`);
+        const imgUrl = `https://staticmap.openstreetmap.de/staticmap.php?center=${center[0]},${center[1]}&zoom=${zoom}&size=800x400&maptype=mapnik&markers=${allMarkers}`;
         const url = `https://996nearme.com`;
         
-        // Add meta tags for image preview
-        const meta = document.createElement('meta');
-        meta.setAttribute('property', 'og:image');
-        meta.setAttribute('content', imgUrl);
-        document.head.appendChild(meta);
+        // Add comprehensive meta tags for image previews across all platforms
+        const metaTags = [
+          // Open Graph (Facebook, LinkedIn, etc.)
+          { property: 'og:image', content: imgUrl },
+          { property: 'og:image:width', content: '800' },
+          { property: 'og:image:height', content: '400' },
+          { property: 'og:image:type', content: 'image/png' },
+          { property: 'og:title', content: "I'm locked in on 996NearMe" },
+          { property: 'og:description', content: 'Join me and other 996ers working nearby!' },
+          { property: 'og:url', content: url },
+          
+          // Twitter Card
+          { name: 'twitter:card', content: 'summary_large_image' },
+          { name: 'twitter:image', content: imgUrl },
+          { name: 'twitter:title', content: "I'm locked in on 996NearMe" },
+          { name: 'twitter:description', content: 'Join me and other 996ers working nearby!' },
+          
+          // Additional platforms
+          { name: 'image', content: imgUrl },
+          { itemprop: 'image', content: imgUrl }
+        ];
+        
+        metaTags.forEach(tag => {
+          const meta = document.createElement('meta');
+          if (tag.property) {
+            meta.setAttribute('property', tag.property);
+          } else if (tag.name) {
+            meta.setAttribute('name', tag.name);
+          } else if (tag.itemprop) {
+            meta.setAttribute('itemprop', tag.itemprop);
+          }
+          meta.setAttribute('content', tag.content);
+          document.head.appendChild(meta);
+        });
 
-        const twitterMeta = document.createElement('meta'); 
-        twitterMeta.setAttribute('name', 'twitter:card');
-        twitterMeta.setAttribute('content', 'summary_large_image');
-        document.head.appendChild(twitterMeta);
-
-        const twitterImage = document.createElement('meta');
-        twitterImage.setAttribute('name', 'twitter:image');
-        twitterImage.setAttribute('content', imgUrl);
-        document.head.appendChild(twitterImage);
-
-        const intent = `https://twitter.com/intent/tweet?text=${text}&url=${encodeURIComponent(url)}&hashtags=996,shipping&via=heshiebrody`;
+        const intent = `https://twitter.com/intent/tweet?text=${text}&url=${encodeURIComponent(url)}`;
         window.open(intent, '_blank');
       });
 
       // Auto-refresh user list every 30 seconds
       setInterval(async () => {
-        const users = await fetchActive();
+        const users = await fetchActive(!showingAll);
         renderList(users);
         users.forEach(upsertMarker);
       }, 30000);

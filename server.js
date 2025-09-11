@@ -22,6 +22,7 @@ app.use(express.static("public"));
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
+
 // Simple haversine (meters)
 function haversine(lat1, lon1, lat2, lon2) {
   const R = 6371000;
@@ -118,8 +119,54 @@ app.post("/api/done", async (req, res) => {
 });
 
 // Initial presence load
-app.get("/api/active", async (_req, res) => {
-  res.json(await getAllLive());
+app.get("/api/active", async (req, res) => {
+  const nearby = req.query.nearby === 'true';
+  const lat = parseFloat(req.query.lat);
+  const lon = parseFloat(req.query.lon);
+
+  if (nearby && (Number.isNaN(lat) || Number.isNaN(lon))) {
+    return res.status(400).json({ error: "lat/lon required for nearby filter" });
+  }
+
+  if (nearby) {
+    // Use SQL-based distance calculation for nearby users (100 feet)
+    const { rows } = await pool.query(`
+      SELECT *,
+        ST_Distance(
+          ST_SetSRID(ST_MakePoint(lon, lat), 4326)::geography,
+          ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography
+        ) AS distance
+      FROM live_users
+      WHERE is_active = true
+        AND updated_at > NOW() - INTERVAL '1 hour'
+        AND ST_DWithin(
+          ST_SetSRID(ST_MakePoint(lon, lat), 4326)::geography,
+          ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography,
+          30.48
+        )
+      ORDER BY distance ASC
+    `, [lon, lat]);
+    res.json(rows);
+  } else {
+    // Show all users within 5 miles (8046.72 meters) - never truly "all"
+    const { rows } = await pool.query(`
+      SELECT *,
+        ST_Distance(
+          ST_SetSRID(ST_MakePoint(lon, lat), 4326)::geography,
+          ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography
+        ) AS distance
+      FROM live_users
+      WHERE is_active = true
+        AND updated_at > NOW() - INTERVAL '1 hour'
+        AND ST_DWithin(
+          ST_SetSRID(ST_MakePoint(lon, lat), 4326)::geography,
+          ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography,
+          8046.72
+        )
+      ORDER BY distance ASC
+    `, [lon, lat]);
+    res.json(rows);
+  }
 });
 
 // Nearby within 100 ft (30.48m)
@@ -182,5 +229,5 @@ io.on("connection", async (socket) => {
 
 const port = process.env.PORT || 3000;
 server.listen(port, () => {
-  console.log(`996’ers Near Me running on http://localhost:${port}`);
+  console.log(`996'ers Near Me running on http://localhost:${port}`);
 });
