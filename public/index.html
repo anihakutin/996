@@ -11,7 +11,7 @@
     gtag('config', 'G-L85T9YNHHR');
   </script>
   <meta charset="UTF-8" />
-  <title>996NearMe — hustlemaps.com</title>
+  <title>Hustlers near me — hustlemaps.com</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <link
     rel="stylesheet"
@@ -336,10 +336,10 @@
     <div class="panel" id="panel">
       <div class="drawer-handle" id="drawerHandle"></div>
       <h1>HustleMaps.com</h1>
-      <div class="row" id="headerNote">See nearby 996'ers or tap <span class="badge">Lock In</span> to share your live pin.</div>
+      <div class="row" id="headerNote">See nearby hustlers or tap <span class="badge">Lock In</span> to share your live pin.</div>
       <div class="row" id="locationPrompt" style="display:none;">
         <div class="ask">
-          <strong>Enable location to see nearby 996'ers</strong><br>
+          <strong>Enable location to see nearby hustlers</strong><br>
           <small>We need your location to show you who's working nearby, even when you're not locked in.</small>
           <div style="margin-top:8px;">
             <button id="enableLocation" class="btn btn-primary" style="padding:6px 12px;width:auto;">Enable Location</button>
@@ -553,7 +553,7 @@
             formEls.forEach(el => el && el.classList.remove('hidden'));
             document.querySelectorAll('.panel label').forEach(el => el.classList.remove('hidden'));
             const headerNote = document.getElementById('headerNote');
-            if (headerNote) headerNote.innerHTML = `See nearby 996'ers or tap <span class=\"badge\">Lock In</span> to share your live pin.`;
+            if (headerNote) headerNote.innerHTML = `See nearby hustlers or tap <span class=\"badge\">Lock In</span> to share your live pin.`;
           }
         }
         
@@ -892,7 +892,7 @@
         const near = await checkNearby(lat, lon);
         const others = near.filter(u => u.id !== me.id);
         document.getElementById('nearby').textContent =
-          others.length ? `${others.length} locked-in 996’er(s) within 100 ft.` : "No one within 100 ft (yet). Be the beacon.";
+          others.length ? `${others.length} locked-in hustlers within 100 ft.` : "No one within 100 ft (yet). Be the beacon.";
 
         // Refresh list now that we're locked in so "You" appears immediately
         try {
@@ -927,7 +927,7 @@
       formEls.forEach(el => el && el.classList.remove('hidden'));
       document.querySelectorAll('.panel label').forEach(el => el.classList.remove('hidden'));
       const headerNote = document.getElementById('headerNote');
-      if (headerNote) headerNote.innerHTML = `See nearby 996'ers or tap <span class=\"badge\">Lock In</span> to share your live pin.`;
+      if (headerNote) headerNote.innerHTML = `See nearby hustlers or tap <span class=\"badge\">Lock In</span> to share your live pin.`;
     }
 
     function setupSocket() {
@@ -1095,14 +1095,14 @@
           { property: 'og:image:height', content: '400' },
           { property: 'og:image:type', content: 'image/png' },
           { property: 'og:title', content: "I'm locked in on HustleMaps" },
-          { property: 'og:description', content: 'Join me and other 996ers working nearby!' },
+          { property: 'og:description', content: 'Join me and other hustlers working nearby!' },
           { property: 'og:url', content: url },
           
           // Twitter Card
           { name: 'twitter:card', content: 'summary_large_image' },
           { name: 'twitter:image', content: imgUrl },
           { name: 'twitter:title', content: "I'm locked in on HustleMaps" },
-          { name: 'twitter:description', content: 'Join me and other 996ers working nearby!' },
+          { name: 'twitter:description', content: 'Join me and other hustlers working nearby!' },
           
           // Additional platforms
           { name: 'image', content: imgUrl },
