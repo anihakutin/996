@@ -529,7 +529,7 @@
       try {
         const users = await fetchActive(!showingAll);
         renderList(users);
-        users.forEach(upsertMarker);
+        syncMarkers(users);
         
         // Check if stored user is still active
         if (storedUser && storedUser.id) {
@@ -695,6 +695,22 @@
         map.removeLayer(m);
         markers.delete(id);
       }
+    }
+
+    // Keep map markers exactly in sync with a given user list
+    function syncMarkers(users) {
+      try {
+        const idsToKeep = new Set(users.map(u => u.id));
+        // Remove markers not in the filtered set
+        for (const [id, marker] of markers.entries()) {
+          if (!idsToKeep.has(id)) {
+            map.removeLayer(marker);
+            markers.delete(id);
+          }
+        }
+        // Upsert markers for the filtered set
+        users.forEach(upsertMarker);
+      } catch (_e) {}
     }
 
     let showingAll = false; // false = nearby (100ft), true = 5 miles
@@ -916,21 +932,14 @@
 
     function setupSocket() {
       const socket = io();
-      socket.on("presence:full", (users) => {
-        renderList(users);
-        users.forEach(upsertMarker);
+      socket.on("presence:full", () => {
+        loadUsers();
       });
-      socket.on("presence:update", (u) => {
-        upsertMarker(u);
-        fetchActive(!showingAll).then(renderList);
-        // If the event is about me, ensure my local state is in sync and visible
-        if (storedUser?.id && u.id === storedUser.id) {
-          me = u;
-        }
+      socket.on("presence:update", () => {
+        loadUsers();
       });
-      socket.on("presence:remove", ({ id }) => {
-        removeMarker(id);
-        fetchActive(!showingAll).then(renderList);
+      socket.on("presence:remove", () => {
+        loadUsers();
       });
     }
 
@@ -1011,7 +1020,7 @@
         // Refresh the user list and markers with new filter
         const users = await fetchActive(!showingAll);
         renderList(users);
-        users.forEach(upsertMarker);
+        syncMarkers(users);
       });
 
       // theme toggle
